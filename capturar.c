@@ -11,14 +11,14 @@
 
 int main(int argc, char *argv[]) {
 
-	if (argc < 2) {
-		printf("Uso: %s <frecuencia_en_Hz>\n", argv[0]);
-		printf("Ejemplo: %s 674000000\n", argv[0]); // Este es el de RTVA, que es por lo que escrito todo el codigo, por si se me olvida xd
+	if (argc < 3) {
+		printf("Uso: %s <frecuencia_en_Hz> <archivo>\n", argv[0]);
+		printf("Ejemplo: %s 674000000 captura_dia_32_diciembre.ts\n", argv[0]); // Este es el de RTVA, que es por lo que escrito todo el codigo, por si se me olvida xd
 		return 1;
 	}
 	long frecuencia_hz = atol(argv[1]); // LUEGO convertirlo a int32, que si no el IOCTL no funcionara, pero el compilador no se queja
 	printf("Cambiando a frecuencia: %ld...\n", frecuencia_hz);
-	int fe_fd  = open("/dev/dvb/adapter0/frontend1", O_RDWR);
+	int fe_fd  = open("/dev/dvb/adapter0/frontend1", O_RDWR); // El frontened en si, CAMBIA ESTO PARA QUE SE AJUSTE AL TUYO!
 	int dmx_fd = open("/dev/dvb/adapter0/demux1", O_RDWR);
 	int dvr_fd = open("/dev/dvb/adapter0/dvr1", O_RDONLY);
 
@@ -40,8 +40,9 @@ int main(int argc, char *argv[]) {
 		.flags = DMX_IMMEDIATE_START
 	};
 	ioctl(dmx_fd, DMX_SET_PES_FILTER, &filter);
+	// Puedes quitar esto, pero si lo quitas soltaras paquetes que no tengan headers PES, si haces esto, algunos muxes pierden datos
 
-	FILE *fp = fopen("CAPTURA.ts", "wb");
+	FILE *fp = fopen(argv[2], "wb"); // O el nombre del archivo que quieras capturar
 	unsigned char buf[188 * 1024]; // Un paquete de .ts son 188 bytes (Mirar el archivo Explorar_Paquete188.py, ahi hago cosas con bits de Transport Stream y eso)
 	printf("Iniciando captura... (Ctrl+C detiene la captura)\n");
 	if (fe_fd < 0) {
