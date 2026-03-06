@@ -62,7 +62,7 @@ static void recibir_pagina(vbi_event *ev, void *user_data) {
 		if (exportador) {
 			vbi_export_option_set(exportador, "full-html", "yes");
 			vbi_export_option_set(exportador, "network", "1");
-			vbi_export_option_set(exportador, "charset", "UTF-8");
+			vbi_export_option_set(exportador, "charset", "5");
 			vbi_export_file(exportador, archivo, &pg);
 			vbi_export_delete(exportador);
 		}
