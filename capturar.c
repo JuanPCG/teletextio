@@ -3,6 +3,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <wchar.h> // Necesario para wint_t
+
 #include <sys/ioctl.h>
 
 #include <linux/dvb/frontend.h>
@@ -27,12 +29,13 @@ static char *NOMBRE_CPT = NULL;
 
 
 
+char carpeta[1024];
+
 
 // PES a Sliced para zvbi
 static vbi_bool pes_callback(vbi_dvb_demux *dx, void *user_data, const vbi_sliced *sliced, unsigned int lines, int64_t pts) {
 	vbi_decoder *decoder = (vbi_decoder *) user_data;
-
-    // Al PARECER el PTS se emite en 90khz, osea que el tiempo es eso entre / 90000(.0 por que tiene que ser float), esto es un hack, arreglar esto //
+	// Al PARECER el PTS se emite en 90khz, osea que el tiempo es eso entre / 90000(.0 por que tiene que ser float), esto es un hack, arreglar esto //
 	double timestamp = pts / 90000.0;
 	vbi_decode(decoder, sliced, lines, timestamp);
 	return TRUE; // 1 si se rompe
@@ -46,45 +49,46 @@ static uint16_t obtener_pid(const uint8_t *paquete) {
 // Cuando recibe una página nueva la manda aqui
 
 static void recibir_pagina(vbi_event *ev, void *user_data) {
-	if (ev->type != VBI_EVENT_TTX_PAGE)
-		return;
-	vbi_export *exportador;
+
+if (ev->type != VBI_EVENT_TTX_PAGE) return;
 	vbi_decoder *decoder = (vbi_decoder *) user_data;
 	vbi_page pg;
-	char *errstr = NULL;
-	char subcarpeta[1024];
-	char archivo[1024];
-	if (vbi_fetch_vt_page(decoder, &pg, ev->ev.ttx_page.pgno, ev->ev.ttx_page.subno, VBI_WST_LEVEL_1p5, 25, 0)) {
-		snprintf(subcarpeta, sizeof(subcarpeta), "%s-TELETEXTO/%03X", NOMBRE_CPT, pg.pgno);
-		mkdir(subcarpeta, 0777);
-		snprintf(archivo, sizeof(archivo), "%s/sub_%02X.html", subcarpeta, pg.subno);
-		exportador = vbi_export_new("html", &errstr);
-		if (exportador) {
-			vbi_export_option_set(exportador, "full-html", "yes");
-			vbi_export_option_set(exportador, "network", "1");
-			vbi_export_option_set(exportador, "charset", "5");
-			vbi_export_file(exportador, archivo, &pg);
-			vbi_export_delete(exportador);
-		}
-
-		char archivo_raw[1024];
-		snprintf(archivo_raw, sizeof(archivo_raw), "%s-TELETEXTO/%03X_%02X.raw", NOMBRE_CPT, pg.pgno, pg.subno);
-		FILE *f = fopen(archivo_raw, "wb");
+	if (vbi_fetch_vt_page(decoder, &pg, ev->ev.ttx_page.pgno, ev->ev.ttx_page.subno, VBI_WST_LEVEL_3p5, 25, 0)) {
+		printf("Encontrado bloque teletexto\n");
+		char filename[1024];
+		snprintf(filename, sizeof(filename), "%s/%03X-%02X.json", carpeta, pg.pgno, pg.subno);
+		FILE *f = fopen(filename, "w");
 		if (f) {
-			int dimensiones[2] = { pg.rows, pg.columns };
-			fwrite(dimensiones, sizeof(int), 2, f);
-			fwrite(pg.text, sizeof(vbi_char), pg.rows * pg.columns, f);
+			fprintf(f, "{\n");
+			fprintf(f, "  \"pagina\": \"%03X\",\n", pg.pgno);
+			fprintf(f, "  \"subpagina\": \"%02X\",\n", pg.subno);
+			fprintf(f, "  \"contenido\": [\n");
+			for (int r = 0; r < pg.rows; r++) {
+				fprintf(f, "    \"");
+				for (int c = 0; c < pg.columns; c++) {
+					vbi_char vc = pg.text[r * pg.columns + c];
+					fprintf(f,
+						"[U:%d FG:%u BG:%u OP:%u SZ:%u UL:%u BL:%u IT:%u FL:%u CN:%u BX:%u]",
+						vc.unicode,
+						vc.foreground,
+						vc.background,
+						vc.opacity,
+						vc.size,
+						vc.underline,
+						vc.bold,
+						vc.italic,
+						vc.flash,
+						vc.conceal);
+				}
+				fprintf(f, "\"%s\n", (r == pg.rows - 1) ? "" : ",");
+			}
+			fprintf(f, "  ]\n");
+			fprintf(f, "}\n");
 			fclose(f);
-			printf("\r[+] Página %03X guardada en formato crudo: %s", pg.pgno, archivo_raw);
-			fflush(stdout);
 		}
-
-		printf("\n--- PÁGINA TELETEXTO %03X ---\n", pg.pgno);
-		char texto[4096];
-		vbi_print_page_region(&pg, texto, sizeof(texto), "UTF-8", 0, 0, 0, 0, 40, 25);
-		printf("%s\n", texto);
 		vbi_unref_page(&pg);
 	}
+
 }
 
 
@@ -102,7 +106,6 @@ int main(int argc, char *argv[]) {
 
 	printf("Cambiando a frecuencia: %ld Hz...\n", frecuencia_hz);
 
-	char carpeta[1024];
 	snprintf(carpeta, sizeof(carpeta), "%s-TELETEXTO", argv[2]);
 	bool error_carpeta = mkdir(carpeta, 0777);
 	if (error_carpeta) {
