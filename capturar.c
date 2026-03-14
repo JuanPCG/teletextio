@@ -24,6 +24,11 @@
 #define MAX_PID 8192
 #define BITARRAY_SIZE ((MAX_PID + 7) / 8)
 
+// Esto es un poco sucio, por que es async! Pero en teoria casi que a lo justo
+int pid_ahora = 0;
+int pagina_busqueda = -1;
+
+
 static vbi_decoder *dec = NULL;
 static vbi_dvb_demux *demux = NULL;
 
@@ -55,12 +60,12 @@ static inline int is_pid_set(uint16_t pid) {
 static int load_pids_from_json(const char *json_file) {
 	FILE *f = fopen(json_file, "r");
 	if (!f) {
-		fprintf(stderr, "Error: No se puede abrir %s\n", json_file);
+		fprintf(stderr, "Error: No se puede abrir %s\n", json_file); // 🐛🐛
 		return 0;
 	}
 
 	char buffer[65536];
-	size_t bytes_read = fread(buffer, 1, sizeof(buffer) - 1, f);
+	size_t bytes_read = fread(buffer, 1, sizeof(buffer) - 1, f); // 🐛🐛
 	fclose(f);
 	
 	if (bytes_read <= 0) {
@@ -76,16 +81,16 @@ static int load_pids_from_json(const char *json_file) {
 		return 0;
 	}
 
-	const char *bracket = strchr(pids_start, '[');
+	const char *bracket = strchr(pids_start, '['); // 🐛🐛🐛
 	if (!bracket) {
 		fprintf(stderr, "Error: Formato JSON inválido\n");
 		return 0;
 	}
 
 	int pid_count = 0;
-	const char *p = bracket + 1;
+	const char *p = bracket + 1; // 🐛🐛
 
-	while (*p && *p != ']') {
+	while (*p && *p != ']') { // 🐛🐛
 		while (*p && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r' || *p == ',')) {
 			p++;
 		}
@@ -105,7 +110,7 @@ static int load_pids_from_json(const char *json_file) {
 	}
 
 	printf("Total de %d PIDs de teletexto cargados\n", pid_count);
-	return pid_count;
+	return pid_count; // 🐛🐛
 }
 
 // PES a Sliced para zvbi
@@ -191,17 +196,19 @@ static void write_unicode_char(FILE *f, uint32_t unicode) {
 
 // Cuando recibe una página nueva
 static void recibir_pagina(vbi_event *ev, void *user_data) {
+	char subcarp[2048]; // Mucho, pero para probar
+	snprintf(subcarp, sizeof(subcarp), "TELETEXTO/%s/PID%d", NOMBRE_CPT, pid_ahora);
+	mkdir(subcarp, 0777); // Mirame, soy un programador!
 	if (ev->type != VBI_EVENT_TTX_PAGE) return;
-	
 	vbi_decoder *decoder = (vbi_decoder *) user_data;
 	vbi_page pg;
-	
+	if (pagina_busqueda >= 0 && pg.pgno != pagina_busqueda) {
+		return;
+	}
 	if (vbi_fetch_vt_page(decoder, &pg, ev->ev.ttx_page.pgno, ev->ev.ttx_page.subno, VBI_WST_LEVEL_3p5, 25, 0)) {
-		printf("Encontrado bloque teletexto: %03X-%02X\n", pg.pgno, pg.subno);
-		
+		printf("Encontrado bloque teletexto: %03X-%02X del PID %d\n", pg.pgno, pg.subno, pid_ahora); //
 		char filename[1024];
-		snprintf(filename, sizeof(filename), "%s/%03X-%02X.json", carpeta, pg.pgno, pg.subno);
-		
+		snprintf(filename, sizeof(filename), "%s/%03X-%02X.json", subcarp, pg.pgno, pg.subno);
 		FILE *f = fopen(filename, "w");
 		if (f) {
 			fprintf(f, "{\n");
@@ -210,42 +217,42 @@ static void recibir_pagina(vbi_event *ev, void *user_data) {
 			fprintf(f, "  \"filas\": %d,\n", pg.rows);
 			fprintf(f, "  \"columnas\": %d,\n", pg.columns);
 			fprintf(f, "  \"contenido_texto\": [\n");
-			
+
 			for (int r = 0; r < pg.rows; r++) {
 				fprintf(f, "    \"");
 				for (int c = 0; c < pg.columns; c++) {
 					vbi_char vc = pg.text[r * pg.columns + c];
 					write_unicode_char(f, vc.unicode);
-				}
-				fprintf(f, "\"%s\n", (r == pg.rows - 1) ? "" : ",");
-			}
-			
-			fprintf(f, "  ],\n");
-			fprintf(f, "  \"contenido_detallado\": [\n");
-			
-			for (int r = 0; r < pg.rows; r++) {
-				fprintf(f, "    [\n");
-				for (int c = 0; c < pg.columns; c++) {
-					vbi_char vc = pg.text[r * pg.columns + c];
-					fprintf(f, "      {\n");
-					fprintf(f, "        \"unicode\": %u,\n", vc.unicode);
-					fprintf(f, "        \"caracter\": \"");
-					write_unicode_char(f, vc.unicode);
-					fprintf(f, "\",\n");
-					fprintf(f, "        \"foreground\": %u,\n", vc.foreground);
-					fprintf(f, "        \"background\": %u,\n", vc.background);
-					fprintf(f, "        \"opacity\": %u,\n", vc.opacity);
-					fprintf(f, "        \"size\": %u,\n", vc.size);
-					fprintf(f, "        \"underline\": %u,\n", vc.underline);
-					fprintf(f, "        \"bold\": %u,\n", vc.bold);
-					fprintf(f, "        \"italic\": %u,\n", vc.italic);
-					fprintf(f, "        \"flash\": %u,\n", vc.flash);
-					fprintf(f, "        \"conceal\": %u\n", vc.conceal);
-					fprintf(f, "      }%s\n", (c == pg.columns - 1) ? "" : ",");
-				}
+					}
+					fprintf(f, "\"%s\n", (r == pg.rows - 1) ? "" : ",");
+					}
+
+					fprintf(f, "  ],\n");
+					fprintf(f, "  \"contenido_detallado\": [\n");
+
+					for (int r = 0; r < pg.rows; r++) {
+						fprintf(f, "    [\n");
+						for (int c = 0; c < pg.columns; c++) {
+						vbi_char vc = pg.text[r * pg.columns + c];
+						fprintf(f, "      {\n");
+						fprintf(f, "        \"unicode\": %u,\n", vc.unicode);
+						fprintf(f, "        \"caracter\": \"");
+						write_unicode_char(f, vc.unicode);
+						fprintf(f, "\",\n");
+						fprintf(f, "        \"foreground\": %u,\n", vc.foreground);
+						fprintf(f, "        \"background\": %u,\n", vc.background);
+						fprintf(f, "        \"opacity\": %u,\n", vc.opacity);
+						fprintf(f, "        \"size\": %u,\n", vc.size);
+						fprintf(f, "        \"underline\": %u,\n", vc.underline);
+						fprintf(f, "        \"bold\": %u,\n", vc.bold);
+						fprintf(f, "        \"italic\": %u,\n", vc.italic);
+						fprintf(f, "        \"flash\": %u,\n", vc.flash);
+						fprintf(f, "        \"conceal\": %u\n", vc.conceal);
+						fprintf(f, "      }%s\n", (c == pg.columns - 1) ? "" : ",");
+					}
 				fprintf(f, "    ]%s\n", (r == pg.rows - 1) ? "" : ",");
-			}
-			
+				}
+
 			fprintf(f, "  ]\n");
 			fprintf(f, "}\n");
 			fclose(f);
@@ -280,21 +287,34 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Error: No se pudieron cargar los PIDs\n");
 		return 1;
 	}
+	char carp_base[10];
+	snprintf(carp_base, sizeof(carp_base), "TELETEXTOS");
+	if (mkdir(carp_base, 0777) && errno != EEXIST) { // Si ya existe no es un 'error'
+		printf("Error creando la carpeta contenedora!");
+		return 1;
+	}
 
-	snprintf(carpeta, sizeof(carpeta), "%s-TELETEXTO", argv[2]);
+	char carp_restos_streams[7];
+	snprintf(carp_restos_streams, sizeof(carp_base), "STREAMS");
+	if (mkdir(carp_restos_streams, 0777) && errno != EEXIST) {
+		printf("Error creando la carpeta contenedora!");
+		return 1;
+	}
+
+	snprintf(carpeta, sizeof(carpeta), "TELETEXTO/%s", argv[2]);
 	if (mkdir(carpeta, 0777) && errno != EEXIST) {
 		printf("Error creando carpeta!\n");
 	}
-	
+
 	dec = vbi_decoder_new();
 	if (!dec) {
-		fprintf(stderr, "Error creando decoder VBI\n");
+		fprintf(stderr, "Error creando decoder VBI\n (Tienes libzvbi?)\n");
 		return 1;
 	}
 
 	demux = vbi_dvb_pes_demux_new(pes_callback, dec);
 	if (!demux) {
-		fprintf(stderr, "Error creando demux DVB\n");
+		fprintf(stderr, "Error creando demux DVB\n (Tienes libzvbi?)\n");
 		vbi_decoder_delete(dec);
 		return 1;
 	}
@@ -325,12 +345,16 @@ int main(int argc, char *argv[]) {
 		.input = DMX_IN_FRONTEND,
 		.output = DMX_OUT_TS_TAP,
 		.pes_type = DMX_PES_OTHER,
-		.flags = DMX_IMMEDIATE_START	
+		.flags = DMX_IMMEDIATE_START
 	};
 
 	ioctl(dmx_fd, DMX_SET_PES_FILTER, &filter);
 
-	FILE *fp = fopen(argv[2], "wb");
+	char ruta[1024]; // Mucho, pero por si acaso
+
+	snprintf(ruta, sizeof(ruta), "STREAMS/%s", argv[2]);
+
+	FILE *fp = fopen(ruta, "wb");
 	if (!fp) {
 		perror("Error abriendo archivo, tienes permisos?");
 		return 1;
@@ -350,7 +374,7 @@ int main(int argc, char *argv[]) {
 		for (int i = 0; i < r; i += TAMANO_PAQUETE_TS) {
 			uint8_t *paquete = &buf[i];
 			if (paquete[0] != 0x47)
-				continue;
+				continue; // Paquete roto
 			
 			packets_checked++;
 			uint16_t pid = obtener_pid(paquete);
@@ -359,10 +383,9 @@ int main(int argc, char *argv[]) {
 				fprintf(stderr, "Paquetes analizados: %d, Coincidencias: %d\n", packets_checked, packets_matched);
 			}
 			
-			// Check if this PID is in our list
-			if (!is_pid_set(pid))
+			if (!is_pid_set(pid)) {
 				continue;
-			
+			}
 			packets_matched++;
 			if (debug) {
 				fprintf(stderr, "PID coincidencia: 0x%04X (paquete %d)\n", pid, packets_checked);
@@ -386,7 +409,9 @@ int main(int argc, char *argv[]) {
 			const uint8_t *payload = paquete + offset;
 			unsigned int payload_len = 188 - offset;
 			if (debug) fprintf(stderr, "  Enviando payload de %d bytes al demux\n", payload_len);
+			pid_ahora = pid;
 			vbi_dvb_demux_feed(demux, payload, payload_len);
+
 		}
 	}
 	

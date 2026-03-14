@@ -37,6 +37,7 @@ bl_as = {
 }
 
 
+
 # Importa esta funcion para convertir rapido
 def ascii_a_teletexto(numero):
 	global fallos_ascii
@@ -80,6 +81,18 @@ def info_usable_caracter(datos):
 		'conceal': datos.get('conceal', 0),			# Esto no se usa en España ni en Europa en general, PERO por si acaso.
 									# /* Hack de transparencia de -VLC- FFMPEG */
 	}
+
+
+
+mfm_tabla = {
+    "fg" : "$[fg.color=%ATTR %CHAR]",
+    "bg" : "$[fg.color=%ATTR %CHAR]",
+    "bold" : "**%CHAR**",
+    "italics": "*%CHAR*",
+    "italics": "*%CHAR*",
+
+}
+
 
 
 # def styles_equal(style1, style2):
@@ -242,6 +255,9 @@ if os.path.isdir(json_file):
 	for i in archivos:
 		encolar(f"{i}")
 		arch_actual += 1
+else:
+	print("Trabajando en archivos individuales!")
+	encolar(json_file)
 salir_y_generar_HTML()
 
 
