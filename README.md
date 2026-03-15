@@ -24,3 +24,6 @@ Los emojis de oruga significan que hay algo que es muy 'buggy' o que es propenso
 	Un script que extrae todos los streams reconocidos como teletexto a archivos independientes usando FFMPEG.
 	Uso: ./ETT.py 500_STREAMS.ts
 		(Extrae cualquier stream de teletexto a 'teletextos-500_STREAMSts/')
+
+## antena.c
+	Un mini programa de C que 'apunta la antena' y abre el Demux para que lo veas con lo que quieras. VLC, o cat a un archivo, etc.
