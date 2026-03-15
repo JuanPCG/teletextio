@@ -117,13 +117,15 @@ def create_html_from_json(json_file): # La mayoria de este codigo esta copiado d
 		if 'contenido_detallado' in data:
 			contenido = data['contenido_detallado']
 			lin_actual = 0
+			lineas_vistas = {}
 			for line in contenido:
 				if lin_actual == 0 and saltar1ra:
 					print("Saltando primera linea...")
 					lin_actual+=1
+					lineas_vistas[0] = "{RELOJ}"
 					continue
-				html += '<div class="line">'
-				# Lo de no repetir spans por cada cosa
+				div_esta = ""
+				html+='<div class="line">'				# Lo de no repetir spans por cada cosa
 				i = 0
 				while i < len(line):
 					char_data = line[i]
@@ -158,7 +160,25 @@ def create_html_from_json(json_file): # La mayoria de este codigo esta copiado d
 
 					class_str = ' '.join(classes) # Tambien se puede hacer for clase in classes: class_str += clase
 					class_attr = f' class="{class_str}"' if class_str else '' # Si no tenemos clases, no ponemos nada, por que va justo despues del <span> sin espacio.
-					html += f'<span{class_attr} style="color: {current_style["fg"]}; background-color: {current_style["bg"]};">{text_segment}</span>' # La linea, ya construida
+					linea_F = f'<span{class_attr} style="color: {current_style["fg"]}; background-color: {current_style["bg"]};">{text_segment}</span>' # La linea, ya construida
+					lineas_vistas[lin_actual] = f"{linea_F}"
+
+#					div_esta = '<div class="line">'
+#					html+=div_esta
+					html+=linea_F
+#					if lineas_vistas[lin_actual-1] == linea_F:
+#						nuevo_html = html[:-len(linea_F)]
+#						html=nuevo_html
+#						print(f"LINEA REPETIDA EN POSICION {lin_actual}, contenido: {linea_F}\nEs igual a {lineas_vistas[lin_actual-1]}")
+#						div_esta = '<div class="line doble">'
+#						html += div_esta
+#						html += linea_F
+#					else:
+#						print(f"Linea {lin_actual} no se repite...")
+#						div_esta = '<div class="line">'
+#						html += div_esta
+#						html += linea_F
+					lin_actual+=1
 					i = j # Los estilos (Poner el 'nuevo' en el 'anterior')
 				html += '</div>\n' # Cerramos el div de esta linea
 		else: # SI NO TENEMOS CONTENIDO EN EL JSON

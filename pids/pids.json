@@ -1,0 +1,12 @@
+
+{
+  "teletext_pids": [1234]
+}
+
+
+echo 'ibase=16; (HEX)' | bc
+
+
+El hex que te de FFMPEG para DVB_TELETEXT, con el 0x quitado, te devuelve un numero decimal
+
+Este archivo en realidad no se procesa como JSON, el programa capturar.c solo busca "TELETEXT_PIDS": Y coje lo que venga despues. Asi que estas lineas no le molestan
