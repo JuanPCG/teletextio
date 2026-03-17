@@ -7,6 +7,7 @@ Pero tengo pensando hacer mas formatos.
 
 import json, sys, os, pathlib, re, datetime
 
+# ---------- [ Opciones ] ----------
 ruta_css = "../../../../estilos_txt_nuevo.css"
 ruta_css_indice = "/css/pagina.css"
 ruta_indice = "/teletexto/"
@@ -18,7 +19,10 @@ carpeta = ""
 ruta_final = ""
 regex_m = r"[1-8]\d{2}"
 todo_en_uno = False
+# ----------------------------------
 
+
+# COLORES y otras variables varias -
 
 bl_as = {
 	#  Bloques 20-2F
@@ -38,7 +42,28 @@ bl_as = {
 	0x70: "🬭", 0x71: "🬮", 0x72: "🬯", 0x73: "🬰", 0x74: "🬱",
 	0x75: "🬲", 0x76: "🬳", 0x77: "🬴", 0x78: "🬵", 0x79: "🬶",
 	0x7A: "🬷", 0x7B: "🬸", 0x7C: "🬹", 0x7D: "🬺", 0x7E: "🬻", 0x7F: "█"
+
+	# Cosas especiales
+	# 0x95: " " (MACRO DE DIBUJO DE Videotext Character Set)
+	# 0x01: " " (Inicio de sequencia de Videotext Character Set)
+	# 0x9F: " " (Fin de sequencia de Videotext Character Set) (?)
 }
+
+
+# Los colores que sacara de LibZVBI, puedes cambiarlos para HTML
+
+TTX_COLORS = {
+	0: '#000000',  # Negro
+	1: '#FF0000',  # Rojo
+	2: '#00FF00',  # Verde
+	3: '#FFFF00',  # Amarillo
+	4: '#0000FF',  # Azul
+	5: '#FF00FF',  # Magneta
+	6: '#00FFFF',  # Azul cian
+	7: '#FFFFFF',  # Blanco
+}
+
+# ----------------------------------
 
 
 def regex_enlaces(linea):
@@ -65,7 +90,7 @@ def ascii_a_teletexto(numero):
 	global fallos_ascii
 	if numero > 60000:
 		cod_teletexto = numero & 0x7F
-		if cod_teletexto < 0x20:
+		if cod_teletexto < 0x20: # Investigando sobre esto, cada caracter indica un espacio diferente. Creo que esto es imposible de implementar en HTML y en la mayoria de lenguajes. Igual un class='espacio-6' para cada cosa, o algo por el estilo
 			return " " # Es un caracter de control (Tengo que implementar esto, igual usar lo que ya tengo en el json, o marcarlo desde aqui)
 		elif cod_teletexto == 32:
 			return " " # Espacio
@@ -76,18 +101,6 @@ def ascii_a_teletexto(numero):
 			return f"(0x{cod_teletexto})" # El codigo, para identificarlo
 	else:
 		return "#"
-
-# Los colores que sacara de LibZVBI, puedes cambiarlos para HTML
-TTX_COLORS = {
-	0: '#000000',  # Negro
-	1: '#FF0000',  # Rojo
-	2: '#00FF00',  # Verde
-	3: '#FFFF00',  # Amarillo
-	4: '#0000FF',  # Azul
-	5: '#FF00FF',  # Magneta
-	6: '#00FFFF',  # Azul cian
-	7: '#FFFFFF',  # Blanco
-}
 
 def color_desde_txt(color_code):
 	return TTX_COLORS.get(color_code & 0x7, '#FFFFFF')
@@ -106,14 +119,13 @@ def info_usable_caracter(datos):
 
 
 
-mfm_tabla = {
-    "fg" : "$[fg.color=%ATTR %CHAR]",
-    "bg" : "$[fg.color=%ATTR %CHAR]",
-    "bold" : "**%CHAR**",
-    "italics": "*%CHAR*",
-    "italics": "*%CHAR*",
-
-}
+mfm_tabla = { # Pruebas
+	"fg" : "$[fg.color=%ATTR %CHAR]", # Los mismos que HTML !! PERO SIN COLORES COMO NOMBRE, black != 000000
+	"bg" : "$[fg.color=%ATTR %CHAR]",
+	"bold" : "**%CHAR**", # No se puede hacer nada mejor
+	"italics": "*%CHAR*",
+	"flash": "$[blink %CHAR]" # Creo que $[blink] tenia un atributo de tiempo.
+} # En MFM no puedes escapar un $[, asi que esperamos que nunca tengamos uno.
 
 
 
