@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Teletext JSON to HTML parser
-Converts teletext JSON files to simple colored HTML
+Libreria conversion Teletexto
+De momento solo Teletexto (JSON con caracteres unicodes) => HTML
+Pero tengo pensando hacer mas formatos.
 """
 
 import json, sys, os, pathlib, re, datetime
@@ -15,6 +16,9 @@ arch_actual = 0
 fallos_ascii = False
 carpeta = ""
 ruta_final = ""
+regex_m = r"[1-8]\d{2}"
+
+
 
 bl_as = {
 	#  Bloques 20-2F
@@ -36,6 +40,21 @@ bl_as = {
 	0x7A: "🬷", 0x7B: "🬸", 0x7C: "🬹", 0x7D: "🬺", 0x7E: "🬻", 0x7F: "█"
 }
 
+
+def regex_enlaces(linea):
+	""" Si hay enlace valido, o los 3 numeros existen, devuelve un enlace, si no, no devuelve nada """
+	match = re.search(regex_m,linea)
+	if match:
+		arch_final = sys.argv[1]
+		arch_final += match.group()
+		arch_final += "-00.json"
+		arch_final = pathlib.Path(arch_final)
+		if arch_final in archivos:
+			html = match.group()
+			html += "-00.html"
+			return html,match.group() # el archivo en si, mas lo que hay que reemplazar
+	else:
+		return None
 
 
 # Importa esta funcion para convertir rapido
@@ -120,7 +139,7 @@ def create_html_from_json(json_file): # La mayoria de este codigo esta copiado d
 			lineas_vistas = {}
 			for line in contenido:
 				if lin_actual == 0 and saltar1ra:
-					print("Saltando primera linea...")
+					#print("Saltando primera linea...")
 					lin_actual+=1
 					lineas_vistas[0] = "{RELOJ}"
 					continue
@@ -161,6 +180,9 @@ def create_html_from_json(json_file): # La mayoria de este codigo esta copiado d
 					class_str = ' '.join(classes) # Tambien se puede hacer for clase in classes: class_str += clase
 					class_attr = f' class="{class_str}"' if class_str else '' # Si no tenemos clases, no ponemos nada, por que va justo despues del <span> sin espacio.
 					linea_F = f'<span{class_attr} style="color: {current_style["fg"]}; background-color: {current_style["bg"]};">{text_segment}</span>' # La linea, ya construida
+					enlace = regex_enlaces(linea_F)
+					if enlace != None:
+						linea_F = linea_F.replace(enlace[1],f"<a href='{enlace[0]}'>{enlace[1]}</a>")
 					lineas_vistas[lin_actual] = f"{linea_F}"
 
 #					div_esta = '<div class="line">'
@@ -219,7 +241,7 @@ def encolar(ruta): # Llamamos aqui con los archivos, individuales
 		html_content = create_html_from_json(ruta)
 		with open(f"{ruta_final}/{os.path.basename(ruta).replace('.json','.html')}", 'w', encoding='utf-8') as f:
 			f.write(html_content)
-		print(f"✓ HTML generado: {ruta}")
+		#print(f"✓ HTML generado: {ruta}")
 	except json.JSONDecodeError as e:
 		print(f"Error parseando JSON: {e}")
 		sys.exit(1)
@@ -272,6 +294,7 @@ if os.path.isdir(json_file):
 	car = pathlib.Path(json_file)
 	archivos = list(car.glob('*.json'))
 	archivos.sort(key=sort_key)
+	print(archivos)
 	for i in archivos:
 		encolar(f"{i}")
 		arch_actual += 1
