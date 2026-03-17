@@ -17,7 +17,7 @@ fallos_ascii = False
 carpeta = ""
 ruta_final = ""
 regex_m = r"[1-8]\d{2}"
-
+todo_en_uno = False
 
 
 bl_as = {
@@ -50,7 +50,10 @@ def regex_enlaces(linea):
 		arch_final += "-00.json"
 		arch_final = pathlib.Path(arch_final)
 		if arch_final in archivos:
-			html = match.group()
+			html = ""
+			if todo_en_uno:
+				html = "#"
+			html += match.group()
 			html += "-00.html"
 			return html,match.group() # el archivo en si, mas lo que hay que reemplazar
 	else:
@@ -208,27 +211,29 @@ def create_html_from_json(json_file): # La mayoria de este codigo esta copiado d
 				for line in data['contenido_texto']: # Feo, intenta que no pase.
 					html += f'<div class="line">{line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")}</div>\n'
 
-		# Parte 'footer' (Enlaces)
-		html+="<hr>"
-		try: # Si tenemos una página antes
-			anterior = os.path.basename(archivos[arch_actual-1]).replace('.json','.html')
-			html += f"""<p><a href="{anterior}">Página anterior</a> | """
-		except Exception as E:
-			print("Falta la anterior!")
-			print(E)
-		try: # Si tenemos una página siguiente
-			siguiente = os.path.basename(archivos[arch_actual+1]).replace('.json','.html')
-			html += f"""<a href="{siguiente}">Página siguiente</a></p>"""
-		except Exception as E:
-			print("Falta la siguiente!")
-			print(E)
+			# Parte 'footer' (Enlaces)
+		if not todo_en_uno:
+			html+="<hr>"
+			try: # Si tenemos una página antes
+				anterior = os.path.basename(archivos[arch_actual-1]).replace('.json','.html')
+				html += f"""<p><a href="{anterior}">Página anterior</a> | """
+			except Exception as E:
+				print("Falta la anterior!")
+				print(E)
+			try: # Si tenemos una página siguiente
+				siguiente = os.path.basename(archivos[arch_actual+1]).replace('.json','.html')
+				html += f"""<a href="{siguiente}">Página siguiente</a></p>"""
+			except Exception as E:
+				print("Falta la siguiente!")
+				print(E)
 
-		html += f"""<p><a href="{ruta_indice}">[Indice principal]</a> | """
-		html += f"""<a href="index.html">[Indice]</a></p>"""
-		if fallos_ascii: # Si 'ascii_a_teletexto' no encuentra eso, ponemos un pequeño aviso con un enlace a el GitHub, por si alguien sabe que hacer para arreglarlo.
-			html+="""<p>Alerta: Se han generado problemas en esta página, mira los bloques que fallan (0x00)</p>"""
-			html+="""<p>Si puedes, por favor, <a href="https://github.com/JuanPCG/teletextio/tree/master">contribuye</a> para arreglar esto</p>"""
-			fallos_ascii = False
+			html += f"""<p><a href="{ruta_indice}">[Indice principal]</a> | """
+			html += f"""<a href="index.html">[Indice]</a></p>"""
+			if fallos_ascii: # Si 'ascii_a_teletexto' no encuentra eso, ponemos un pequeño aviso con un enlace a el GitHub, por si alguien sabe que hacer para arreglarlo.
+				html+="""<p>Alerta: Se han generado problemas en esta página, mira los bloques que fallan (0x00)</p>"""
+				html+="""<p>Si puedes, por favor, <a href="https://github.com/JuanPCG/teletextio/tree/master">contribuye</a> para arreglar esto</p>"""
+				fallos_ascii = False
+
 		html +="""
 			</body>
 		</html>
@@ -239,9 +244,15 @@ def encolar(ruta): # Llamamos aqui con los archivos, individuales
 	print(f"Empezando a procesar... {ruta}")
 	try:
 		html_content = create_html_from_json(ruta)
-		with open(f"{ruta_final}/{os.path.basename(ruta).replace('.json','.html')}", 'w', encoding='utf-8') as f:
-			f.write(html_content)
-		#print(f"✓ HTML generado: {ruta}")
+		if not todo_en_uno:
+			with open(f"{ruta_final}/{os.path.basename(ruta).replace('.json','.html')}", 'w', encoding='utf-8') as f:
+				f.write(html_content)
+				#print(f"✓ HTML generado: {ruta}")
+		else:
+			with open(f"{ruta_final}/index.html", 'a', encoding='utf-8') as f:
+				f.write(f"<hr id='{os.path.basename(ruta).replace('.json','.html')}'>")
+				f.write(html_content) # SUPER HORRIBLE
+				#print(f"✓ HTML generado: {ruta}")
 	except json.JSONDecodeError as e:
 		print(f"Error parseando JSON: {e}")
 		sys.exit(1)
@@ -301,7 +312,8 @@ if os.path.isdir(json_file):
 else:
 	print("Trabajando en archivos individuales!")
 	encolar(json_file)
-salir_y_generar_HTML()
+if not todo_en_uno:
+	salir_y_generar_HTML()
 
 
 
