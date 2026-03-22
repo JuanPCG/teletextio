@@ -3,53 +3,59 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
-#include <wchar.h>
+#include <wchar.h> // Si lo hago bien no necesito hacer casting de tipos con wchar, pero no lo estoy haciendo bien
 
 #include <sys/ioctl.h>
 
 #include <linux/dvb/frontend.h>
 #include <linux/dvb/dmx.h>
+// Por que los includes estos quedan hasta bien y todo :)
 
-#include <stdbool.h>
+#include <stdbool.h> // LITERALMENTE solo usado una vez para devolver un TRUE que podria ser un bit perfectamente.
 #include <string.h>
 #include <stdint.h>
 
-#include <libzvbi.h>
+#include <libzvbi.h> // EL QUE COMPILES!!! Usa lo de --enable-dvb en el configure antes del make!!
+// POR DEFECTO EN DEBIAN VIENE SIN DVB!!!
+// Este programa usa DVB (Obviamente)
 
 #include <sys/stat.h>
 #include <sys/types.h>
 
 
-#define TAMANO_PAQUETE_TS 188
-#define MAX_PID 8192
-#define BITARRAY_SIZE ((MAX_PID + 7) / 8)
+#define TAMANO_PAQUETE_TS 188 // No cambies esto
+#define MAX_PID 8192 // Lo mas grande que he visto ha sido 4000 y algo, pero 8192 creo que es el tope. Los pids 'reales' empiezan como en el 20 o asi.
+#define BITARRAY_SIZE ((MAX_PID + 7) / 8) // Son bits
 
 // Esto es un poco sucio, por que es async! Pero en teoria casi que a lo justo
 int pid_ahora = 0;
 int pagina_busqueda = -1;
 
 
-static vbi_decoder *dec = NULL;
+static vbi_decoder *dec = NULL; // libzvbi no te crea las declaraciones
 static vbi_dvb_demux *demux = NULL;
 
-static char *NOMBRE_CPT = NULL;
-static uint8_t pid_bitarray[BITARRAY_SIZE];
+static char *NOMBRE_CPT = NULL; // Para pasar el argv[1] del main al resto del programa.
+static uint8_t pid_bitarray[BITARRAY_SIZE]; // Si esto no va a cambiar lo puedes poner tu mismo
 
-char carpeta[1024];
+char carpeta[1024]; // Una burrada, pero por si acaso
 
+
+// Lo del debug ---
 static int debug = 0;
-static int packets_checked = 0;
+static int packets_checked = 0; // Quitar esto si llego a eliminar lo del debug en este programa, que no creo
 static int packets_matched = 0;
-
+// ----------------
 
 // Bit array functions
+// Copiado de una página que no recuerdo
 static inline void set_pid_bit(uint16_t pid) {
 	if (pid < MAX_PID) {
 		pid_bitarray[pid / 8] |= (1 << (pid % 8));
 	}
 }
 
-static inline int is_pid_set(uint16_t pid) {
+static inline int is_pid_set(uint16_t pid) { // Ni puta idea pero funciona
 	if (pid < MAX_PID) {
 		return (pid_bitarray[pid / 8] & (1 << (pid % 8))) != 0;
 	}
@@ -57,6 +63,13 @@ static inline int is_pid_set(uint16_t pid) {
 }
 
 // Simple JSON parser for teletext PIDs
+// Este codigo es horrible
+// Lo saque de stack overflow
+// Y añadi algo para avisar sobre errores
+// Y lo adapte a el teletexto
+// De hecho, la primera linea de este comentario decia
+// Simple JSON parser for small ints
+// PUEDE que se pudiese remplazar simplemente un argumento, o todos los argumentos tras argv[2]
 static int load_pids_from_json(const char *json_file) {
 	FILE *f = fopen(json_file, "r");
 	if (!f) {
@@ -67,12 +80,10 @@ static int load_pids_from_json(const char *json_file) {
 	char buffer[65536];
 	size_t bytes_read = fread(buffer, 1, sizeof(buffer) - 1, f); // 🐛🐛
 	fclose(f);
-	
 	if (bytes_read <= 0) {
 		fprintf(stderr, "Error: El archivo JSON está vacío\n");
 		return 0;
 	}
-	
 	buffer[bytes_read] = '\0';
 
 	const char *pids_start = strstr(buffer, "\"teletext_pids\"");
@@ -111,6 +122,7 @@ static int load_pids_from_json(const char *json_file) {
 
 	printf("Total de %d PIDs de teletexto cargados\n", pid_count);
 	return pid_count; // 🐛🐛
+	// Si hay mas de uno se puede buguear un poco, por que creo que no tengo bastantes ciclos para hacer TODO eso tan rapido.
 }
 
 // PES a Sliced para zvbi
@@ -123,10 +135,11 @@ static vbi_bool pes_callback(vbi_dvb_demux *dx, void *user_data, const vbi_slice
 
 // Extraemos el PID
 static uint16_t obtener_pid(const uint8_t *paquete) {
-	return ((paquete[1] & 0x1F) << 8) | paquete[2];
+	return ((paquete[1] & 0x1F) << 8) | paquete[2]; // Esto lo hacia tambien en el explorador de paquetes.
 }
 
 // Escapar caracteres JSON especiales
+// Se que hago esto justo debajo, yo que se.
 static void escape_json_string(FILE *f, const char *str) {
 	if (!str) return;
 	while (*str) {
@@ -155,8 +168,8 @@ static void write_unicode_char(FILE *f, uint32_t unicode) {
 		fprintf(f, " ");
 		return;
 	}
-	
 	// Escape special JSON characters
+	// Me falta implementar esto en la parte del 'compilador'
 	switch (unicode) {
 		case '"':  fprintf(f, "\\\""); return;
 		case '\\': fprintf(f, "\\\\"); return;
@@ -166,14 +179,17 @@ static void write_unicode_char(FILE *f, uint32_t unicode) {
 		case '\r': fprintf(f, "\\r");  return;
 		case '\t': fprintf(f, "\\t");  return;
 	}
-	
+
 	// For control characters, use unicode escape
 	if ((unsigned char)unicode < 0x20) {
 		fprintf(f, "\\u%04x", unicode);
-		return;
+		return; // Bastante obvio lo que hace
 	}
-	
+
 	// Normal UTF-8 encoding
+	// Esto lo habia sacado de FFMPEG, que (creo) que no se llega a usar nunca, por que no los he visto en uso. Los caracteres
+	// estos raros digo. Pero es funcional, no se si en alguna version se habia implementado.
+	// En el primer elif hay un espacio al final del fprint, NO LO BORRES!!!! Eso rompe los archivos, SI, ENSERIO.
 	if (unicode < 0x80) {
 		fprintf(f, "%c", (char)unicode);
 	} else if (unicode < 0x800) {
@@ -257,188 +273,138 @@ static void recibir_pagina(vbi_event *ev, void *user_data) {
 			fprintf(f, "}\n");
 			fclose(f);
 		}
-		vbi_unref_page(&pg);
+		vbi_unref_page(&pg); // Des-cargamos la página
 	}
 }
 
-
-void licencia(char *a) { // Plantilla
-	printf("\n\n\t\t%s - Programa de pre-procesado y captura de streams de DVB-T enfocado en teletexto\n", a);
-	printf("\t\t%s es software libre: puedes redistribuirlo y/o modificarlo bajo los terminos de la\n", a);
-	printf("\t\tGPL de GNU, bien bajo la licencia V3 (o a tu discrecion, cualquier version superior)\n");
-	printf("\t\tESTE PROGRAMA ESTA DISTRIBUIDO CON LA IDEA DE SER UTIL; PERO SIN NINGUNA GARANTIA; puedes\n");
-	printf("\t\tleer el la licencia GPL de GNU en https://www.gnu.org/licenses/\n\n\n", a);
-
-}
-
-void mostrar_ayuda(char *a) {
-	printf("Uso: %s <frecuencia_en_Hz> <archivo> <archivo_pids.json> [debug]\n", a);
-	printf("Ejemplo: %s 674000000 captura_dia_32_diciembre.ts pids.json\n", a);
-	printf("Debug: %s 674000000 captura_dia_32_diciembre.ts pids.json debug\n", a);
-}
-
-
-
 int main(int argc, char *argv[]) {
-	licencia(argv[0]);
-	if (argc < 4) {
-		mostrar_ayuda(argv[0]);
+	if (argc < 3) {
+		printf("Uso: %s <entrada.ts> <archivo_pids.json> [debug]\n", argv[0]);
+		printf("Ejemplo: %s captura_dia_32_diciembre.ts pids.json\n", argv[0]);
+		printf("Debug: %s captura_dia_32_diciembre.ts pids.json debug\n", argv[0]);
+		printf("Nota: El modo debug aqui es un poco inutil. Pero de tomas formas lo puedes usar para comprobar si esta cogiendo bien el PID\n");
 		return 1;
 	}
 
-
-	NOMBRE_CPT = argv[2];
-	if (argc > 4 && strcmp(argv[4], "debug") == 0) {
+	NOMBRE_CPT = argv[1];
+	char *base = strrchr(NOMBRE_CPT, '/'); // Si el nombre tiene un / nos quedamos solo con el final
+	if (base)
+		NOMBRE_CPT = base + 1; // Si no, se rompe al crear la carpeta por que intenta crear estilo 'carpeta_streams/stream1.ts' dentro de 'TELETEXTO', lo cual falla por que mkdir en C no crea padres.
+	if (argc > 3 && strcmp(argv[3], "debug") == 0) {
 		debug = 1;
 		printf("Modo DEBUG activado\n");
 	}
 
-	long frecuencia_hz = atol(argv[1]);
+	memset(pid_bitarray, 0, BITARRAY_SIZE); // Creamos (Vacio) el array de pids (Hasta 8192, que es el tope (?) de DVB-T (Y para todos los DVB (T2, S, S2, C, etc)  (??))
 
-	printf("Cambiando a frecuencia: %ld Hz...\n", frecuencia_hz);
-
-	memset(pid_bitarray, 0, BITARRAY_SIZE);
-
-	printf("Cargando PIDs de teletexto desde %s...\n", argv[3]);
-	if (load_pids_from_json(argv[3]) == 0) {
+	printf("Cargando PIDs de teletexto desde %s...\n", argv[2]);
+	if (load_pids_from_json(argv[2]) == 0) {
 		fprintf(stderr, "Error: No se pudieron cargar los PIDs\n");
 		return 1;
 	}
+
 	char carp_base[10];
-	snprintf(carp_base, sizeof(carp_base), "TELETEXTOS");
-	if (mkdir(carp_base, 0777) && errno != EEXIST) { // Si ya existe no es un 'error'
+	snprintf(carp_base, sizeof(carp_base), "TELETEXTO");
+	if (mkdir(carp_base, 0777) && errno != EEXIST) {
 		printf("Error creando la carpeta contenedora!");
 		return 1;
 	}
 
-	char carp_restos_streams[7];
-	snprintf(carp_restos_streams, sizeof(carp_base), "STREAMS");
-	if (mkdir(carp_restos_streams, 0777) && errno != EEXIST) {
-		printf("Error creando la carpeta contenedora!");
-		return 1;
-	}
-
-	snprintf(carpeta, sizeof(carpeta), "TELETEXTO/%s", argv[2]);
+	snprintf(carpeta, sizeof(carpeta), "TELETEXTO/%s", NOMBRE_CPT);
 	if (mkdir(carpeta, 0777) && errno != EEXIST) {
 		printf("Error creando carpeta!\n");
 	}
 
 	dec = vbi_decoder_new();
 	if (!dec) {
-		fprintf(stderr, "Error creando decoder VBI\n (Tienes libzvbi?)\n");
+		fprintf(stderr, "Error creando decoder VBI\n (Tienes libzvbi?)\n"); // O hacer un binario portable estatico, puto genio.
 		return 1;
 	}
 
 	demux = vbi_dvb_pes_demux_new(pes_callback, dec);
 	if (!demux) {
-		fprintf(stderr, "Error creando demux DVB\n (Tienes libzvbi?)\n");
+		fprintf(stderr, "Error creando demux DVB\n (Tienes libzvbi?)\n"); // El comentario de arriba :D
 		vbi_decoder_delete(dec);
 		return 1;
 	}
 
 	vbi_event_handler_add(dec, VBI_EVENT_TTX_PAGE, recibir_pagina, dec);
 
-	int fe_fd  = open("/dev/dvb/adapter0/frontend1", O_RDWR);
-	int dmx_fd = open("/dev/dvb/adapter0/demux1", O_RDWR);
-	int dvr_fd = open("/dev/dvb/adapter0/dvr1", O_RDONLY);
-
-	if (fe_fd < 0 || dmx_fd < 0 || dvr_fd < 0) {
-		fprintf(stderr, "Error abriendo el dispositivo! ¿Tienes permisos? (¿Grupo video o superusuario?)\n");
-		return 1;
-	}
-
-	struct dtv_property props[] = {
-		{ .cmd = DTV_DELIVERY_SYSTEM, .u.data = SYS_DVBT },
-		{ .cmd = DTV_FREQUENCY,       .u.data = (uint32_t) frecuencia_hz },
-		{ .cmd = DTV_BANDWIDTH_HZ,    .u.data = 8000000 },
-		{ .cmd = DTV_TUNE }
-	};
-
-	struct dtv_properties cmdseq = { .num = 4, .props = props };
-	ioctl(fe_fd, FE_SET_PROPERTY, &cmdseq);
-
-	struct dmx_pes_filter_params filter = {
-		.pid = 0x2000,
-		.input = DMX_IN_FRONTEND,
-		.output = DMX_OUT_TS_TAP,
-		.pes_type = DMX_PES_OTHER,
-		.flags = DMX_IMMEDIATE_START
-	};
-
-	ioctl(dmx_fd, DMX_SET_PES_FILTER, &filter);
-
-	char ruta[1024]; // Mucho, pero por si acaso
-
-	snprintf(ruta, sizeof(ruta), "STREAMS/%s", argv[2]);
-
-	FILE *fp = fopen(ruta, "wb");
+	FILE *fp = fopen(argv[1], "rb"); // Abrir como bytes.
 	if (!fp) {
-		perror("Error abriendo archivo, tienes permisos?");
+		perror("Error abriendo archivo TS"); // Yo que se, si no existe, me da pereza hacer un check de si algo existe
 		return 1;
 	}
 
 	uint8_t buf[188 * 1024];
 
-	printf("Iniciando captura...\n");
+	printf("Procesando archivo TS...\n"); // Esto probablemente no se ve por que las páginas pasan como instantaneas
 
 	while (1) {
-        ssize_t r = read(dvr_fd, buf, sizeof(buf));
-		if (r <= 0)
-			continue;
+		size_t r = fread(buf, 1, sizeof(buf), fp);
 
-		fwrite(buf, 1, r, fp);
+		if (r == 0) // O, cuando lleguemos al final de archivo midiendo el tamaño con sus bytes, por que esto queda como que feo cuando no es 'en directo', ya que sabemos el tamaño del archivo.
+			break;
 
-		for (int i = 0; i < r; i += TAMANO_PAQUETE_TS) {
+		for (int i = 0; i < r; i += TAMANO_PAQUETE_TS) { // No se donde poner esto, pero al principio pense que 'si cargo todo el archivo entero puedo hacer esto mucho mas rapido', esto obviamente es una idea mala, por que me salto el OOMK al segundo intento XD
 			uint8_t *paquete = &buf[i];
+
 			if (paquete[0] != 0x47)
-				continue; // Paquete roto
-			
+				continue;
+
 			packets_checked++;
+
 			uint16_t pid = obtener_pid(paquete);
-			
+
 			if (debug && packets_checked % 10000 == 0) {
-				fprintf(stderr, "Paquetes analizados: %d, Coincidencias: %d\n", packets_checked, packets_matched);
+				fprintf(stderr, "Paquetes analizados: %d, Coincidencias: %d\n",
+					packets_checked, packets_matched);
 			}
-			
-			if (!is_pid_set(pid)) {
+
+			if (!is_pid_set(pid)) // Comprobar contra los pids
 				continue;
-			}
+
 			packets_matched++;
+
 			if (debug) {
-				fprintf(stderr, "PID coincidencia: 0x%04X (paquete %d)\n", pid, packets_checked);
+				fprintf(stderr, "PID coincidencia: 0x%04X (paquete %d)\n",
+					pid, packets_checked);
 			}
-			
-			uint8_t afc = (paquete[3] >> 4) & 0x3;
+
+			uint8_t afc = (paquete[3] >> 4) & 0x3; // El offset del payload en un .ts, libzvbi tiene una funcion que hace practicamente esto. Pero como que era lo suficientemente simple para hacerlo aqui.
+
 			int offset = 4;
-			if (afc == 0 || afc == 2) {
-				if (debug) fprintf(stderr, "  AFC = %d, sin payload\n", afc);
+
+			if (afc == 0 || afc == 2)
 				continue;
-			}
+
 			if (afc == 3) {
 				uint8_t adaptation_length = paquete[4];
 				offset += 1 + adaptation_length;
 			}
-			if (offset >= 188) {
-				if (debug) fprintf(stderr, "  offset >= 188\n");
-				continue;
-			}
-			
-			const uint8_t *payload = paquete + offset;
-			unsigned int payload_len = 188 - offset;
-			if (debug) fprintf(stderr, "  Enviando payload de %d bytes al demux\n", payload_len);
-			pid_ahora = pid;
-			vbi_dvb_demux_feed(demux, payload, payload_len);
 
+			if (offset >= 188)
+				continue;
+
+			const uint8_t *payload = paquete + offset;
+
+			unsigned int payload_len = 188 - offset;
+
+			pid_ahora = pid;
+
+			vbi_dvb_demux_feed(demux, payload, payload_len);
 		}
 	}
-	
-	// Cleanup
-	close(fe_fd);
-	close(dmx_fd);
-	close(dvr_fd);
-	fclose(fp);
-	if (demux) vbi_dvb_demux_delete(demux);
-	if (dec) vbi_decoder_delete(dec);
-	
-	return 0;
+
+	printf("Finalizado.\n"); // Salir limpio
+
+	fclose(fp); // En teoria el kernel libera el archivo al morir, pero por si acaso.
+
+	if (demux)
+		vbi_dvb_demux_delete(demux); // No hace falta, el demux y el decoder se borran al salir el padre.
+
+	if (dec)
+		vbi_decoder_delete(dec);
+
+	return 0; // ME QUEDA IMPLEMENTAR ALGO PARA LOS ERRORES
 }
