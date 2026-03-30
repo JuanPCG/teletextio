@@ -39,3 +39,4 @@ for i in lista:
 		print("Extraccion satisfactoria!")
 	except Exception as e:
 		print(f"Error en {i}\nError: {e}")
+print(lista)

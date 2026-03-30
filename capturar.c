@@ -206,7 +206,7 @@ static void recibir_pagina(vbi_event *ev, void *user_data) {
 		return;
 	}
 	if (vbi_fetch_vt_page(decoder, &pg, ev->ev.ttx_page.pgno, ev->ev.ttx_page.subno, VBI_WST_LEVEL_3p5, 25, 0)) {
-		printf("Encontrado bloque teletexto: %03X-%02X del PID %d\n", pg.pgno, pg.subno, pid_ahora); //
+		printf("\rEncontrado bloque teletexto: %03X-%02X del PID %d", pg.pgno, pg.subno, pid_ahora); //
 		char filename[1024];
 		snprintf(filename, sizeof(filename), "%s/%03X-%02X.json", subcarp, pg.pgno, pg.subno);
 		FILE *f = fopen(filename, "w");

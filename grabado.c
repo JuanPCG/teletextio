@@ -298,10 +298,12 @@ int main(int argc, char *argv[]) {
 	memset(pid_bitarray, 0, BITARRAY_SIZE); // Creamos (Vacio) el array de pids (Hasta 8192, que es el tope (?) de DVB-T (Y para todos los DVB (T2, S, S2, C, etc)  (??))
 
 	printf("Cargando PIDs de teletexto desde %s...\n", argv[2]);
+
 	if (load_pids_from_json(argv[2]) == 0) {
 		fprintf(stderr, "Error: No se pudieron cargar los PIDs\n");
 		return 1;
 	}
+
 
 	char carp_base[10];
 	snprintf(carp_base, sizeof(carp_base), "TELETEXTO");

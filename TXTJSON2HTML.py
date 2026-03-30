@@ -12,13 +12,13 @@ ruta_css = "../../../../estilos_txt_nuevo.css"
 ruta_css_indice = "/css/pagina.css"
 ruta_indice = "/teletexto/"
 archivos = []
-saltar1ra = True
+saltar1ra = True # CAMBIAR ESTO
 arch_actual = 0
 fallos_ascii = False
 carpeta = ""
 ruta_final = ""
 regex_m = r"[1-8]\d{2}"
-todo_en_uno = False
+todo_en_uno = True
 # ----------------------------------
 
 
@@ -230,14 +230,13 @@ def create_html_from_json(json_file): # La mayoria de este codigo esta copiado d
 				anterior = os.path.basename(archivos[arch_actual-1]).replace('.json','.html')
 				html += f"""<p><a href="{anterior}">Página anterior</a> | """
 			except Exception as E:
-				print("Falta la anterior!")
-				print(E)
+				pass
+
 			try: # Si tenemos una página siguiente
 				siguiente = os.path.basename(archivos[arch_actual+1]).replace('.json','.html')
 				html += f"""<a href="{siguiente}">Página siguiente</a></p>"""
 			except Exception as E:
-				print("Falta la siguiente!")
-				print(E)
+				pass
 
 			html += f"""<p><a href="{ruta_indice}">[Indice principal]</a> | """
 			html += f"""<a href="index.html">[Indice]</a></p>"""
@@ -253,7 +252,7 @@ def create_html_from_json(json_file): # La mayoria de este codigo esta copiado d
 		return html # Igual que py_final.py, no escribimos aqui, escribimos fuwera.
 
 def encolar(ruta): # Llamamos aqui con los archivos, individuales
-	print(f"Empezando a procesar... {ruta}")
+	print(f"\rEmpezando a procesar... {os.path.basename(ruta)}", end="")
 	try:
 		html_content = create_html_from_json(ruta)
 		if not todo_en_uno:
@@ -262,7 +261,7 @@ def encolar(ruta): # Llamamos aqui con los archivos, individuales
 				#print(f"✓ HTML generado: {ruta}")
 		else:
 			with open(f"{ruta_final}/index.html", 'a', encoding='utf-8') as f:
-				f.write(f"<hr id='{os.path.basename(ruta).replace('.json','.html')}'>")
+				f.write(f"<hr><p id='{os.path.basename(ruta).replace('.json','.html')}'>{os.path.basename(ruta).replace('.json','.html')}</p>")
 				f.write(html_content) # SUPER HORRIBLE
 				#print(f"✓ HTML generado: {ruta}")
 	except json.JSONDecodeError as e:
@@ -294,38 +293,37 @@ def salir_y_generar_HTML(): # Generamos el index.html>
 	html_index += f"</html>"
 	with open(f"{ruta_final}/index.html", 'w', encoding='utf-8') as f:
 		f.write(html_index)
+	print("\n")
 	print(f"{len(archivos)} páginas procesadas") # Esto no es parte del HTML, simplemente decimos adios y ya
 
 
-
-
-if len(sys.argv) < 3:
-	print("Uso: python3 t.py <archivo o directorio> <canal>")
-	sys.exit(1)
-# ------------------------------------[ 1:1 copiado de mi otro script que estaba usando hasta ahora ]---------------------------------------
-canal = sys.argv[2]
-fecha = datetime.datetime.now()
-año, mes, dia = fecha.year, fecha.month, fecha.day
-os.makedirs(f"{año}/{mes}/{dia}/{canal}", exist_ok=True)
-ruta_final=f"{año}/{mes}/{dia}/{canal}"
-json_file = sys.argv[1]
-if not os.path.exists(json_file):
-	print(f"Error: El archivo o carpeta'{json_file}' no existe")
-	sys.exit(1)
-
-if os.path.isdir(json_file):
-	car = pathlib.Path(json_file)
-	archivos = list(car.glob('*.json'))
-	archivos.sort(key=sort_key)
-	print(archivos)
-	for i in archivos:
-		encolar(f"{i}")
-		arch_actual += 1
-else:
-	print("Trabajando en archivos individuales!")
-	encolar(json_file)
-if not todo_en_uno:
-	salir_y_generar_HTML()
-
+if __name__ == "__main__":
+	if len(sys.argv) < 3:
+		print("Uso: python3 t.py <archivo o directorio> <canal>")
+		sys.exit(1)
+	# ------------------------------------[ 1:1 copiado de mi otro script que estaba usando hasta ahora ]---------------------------------------
+	canal = sys.argv[2]
+	fecha = datetime.datetime.now()
+	año, mes, dia = fecha.year, fecha.month, fecha.day
+	os.makedirs(f"{año}/{mes}/{dia}/{canal}", exist_ok=True)
+	ruta_final=f"{año}/{mes}/{dia}/{canal}"
+	json_file = sys.argv[1]
+	if not os.path.exists(json_file):
+		print(f"Error: El archivo o carpeta'{json_file}' no existe")
+		sys.exit(1)
+	print("\n\n")
+	if os.path.isdir(json_file):
+		car = pathlib.Path(json_file)
+		archivos = list(car.glob('*.json'))
+		archivos.sort(key=sort_key)
+		for i in archivos:
+			encolar(f"{i}")
+			arch_actual += 1
+	else:
+		print("Trabajando en archivos individuales!")
+		encolar(json_file)
+	if not todo_en_uno:
+		salir_y_generar_HTML()
+	print(f"\n\n\t\t{len(archivos)} archivos procesados") # Limpieza de los archivos anteriores
 
 
