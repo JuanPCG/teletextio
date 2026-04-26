@@ -43,6 +43,6 @@ int main(int argc, char *argv[]) {
 	struct dmx_pes_filter_params filter = { .pid = 0x2000, .input = DMX_IN_FRONTEND, .output = DMX_OUT_TS_TAP, .pes_type = DMX_PES_OTHER, .flags = DMX_IMMEDIATE_START};
 	ioctl(dmx_fd, DMX_SET_PES_FILTER, &filter);
 	printf("Haz CTRL-C para salir\n");
-	while (1) { sleep(1);}
+	while (1) { sleep(1); }
 	salir(1);
 }
