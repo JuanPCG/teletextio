@@ -27,3 +27,6 @@ Los emojis de oruga significan que hay algo que es muy 'buggy' o que es propenso
 
 ## antena.c
 	Un mini programa de C que 'apunta la antena' y abre el Demux para que lo veas con lo que quieras. VLC, o cat a un archivo, etc.
+
+## sat2.c
+	Pequeño programa para capturar de satelite.
