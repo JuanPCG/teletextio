@@ -136,120 +136,141 @@ mfm_tabla = { # Pruebas
 
 def create_html_from_json(json_file): # La mayoria de este codigo esta copiado de otras cosas. Pero esta adaptado para lo que necesito.
 	global fallos_ascii
-	with open(json_file, 'r', encoding='utf-8') as f:
-		data = json.load(f)
+	try:
+		with open(json_file, 'r', encoding='utf-8') as f:
+			data = json.load(f)
 
-		html = f"""<!DOCTYPE html>
-		<html lang="es">
-		<head>
-		<meta charset="UTF-8">
-		<link rel="stylesheet" href="{ruta_css}">
-		<title>{os.path.basename(json_file).replace('.json','')}</title>
-		</head>
-		<body>
-		"""
-		if 'contenido_detallado' in data:
-			contenido = data['contenido_detallado']
-			lin_actual = 0
-			lineas_vistas = {}
-			for line in contenido:
-				if lin_actual == 0 and saltar1ra:
-					#print("Saltando primera linea...")
-					lin_actual+=1
-					lineas_vistas[0] = "{RELOJ}"
-					continue
-				div_esta = ""
-				html+='<div class="line">'				# Lo de no repetir spans por cada cosa
-				i = 0
-				while i < len(line):
-					char_data = line[i]
-					current_style = info_usable_caracter(char_data)
-					# Empezamos el segmento de texto
-					text_segment = ""
-					j = i
-					while j < len(line) and (info_usable_caracter(line[j]) == current_style):
-						char_info = line[j]
-						if char_info['unicode'] > 60000: # Hack codigos >60000 de libzvbi
-							text_segment += ascii_a_teletexto(char_info['unicode'])
-						elif char_info['unicode'] > 0:
-							text_segment += chr(char_info['unicode'])
-						else:
-							text_segment += ' '
-						j += 1
-					# Ponemos los HTML-codes en vez de caracteres que pueden romper HTML
-					text_segment = text_segment.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+			html = f"""<!DOCTYPE html>
+			<html lang="es">
+			<head>
+			<meta charset="UTF-8">
+			<link rel="stylesheet" href="{ruta_css}">
+			<title>{os.path.basename(json_file).replace('.json','')}</title>
+			</head>
+			<body>
+			"""
+			if 'contenido_detallado' in data:
+				contenido = data['contenido_detallado']
+				lin_actual = 0
+				lineas_vistas = {}
+				for line in contenido:
+					if lin_actual == 0 and saltar1ra:
+						#print("Saltando primera linea...")
+						lin_actual+=1
+						lineas_vistas[0] = "{RELOJ}"
+						continue
+					div_esta = ""
+					html+='<div class="line">'				# Lo de no repetir spans por cada cosa
+					i = 0
+					while i < len(line):
+						char_data = line[i]
+						current_style = info_usable_caracter(char_data)
+						# Empezamos el segmento de texto
+						text_segment = ""
+						j = i
+						while j < len(line) and (info_usable_caracter(line[j]) == current_style):
+							char_info = line[j]
+							if char_info['unicode'] > 60000: # Hack codigos >60000 de libzvbi
+								text_segment += ascii_a_teletexto(char_info['unicode'])
+							elif char_info['unicode'] > 0:
+								text_segment += chr(char_info['unicode'])
+							else:
+								text_segment += ' '
+							j += 1
+						# Ponemos los HTML-codes en vez de caracteres que pueden romper HTML
+						text_segment = text_segment.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
-					# Los <span> llevan clases, aqui las ponemos.
-					classes = []
-					if current_style['bold']:
-						classes.append('bold')
-					if current_style['italic']:
-						classes.append('italic')
-					if current_style['underline']:
-						classes.append('underline')
-					if current_style['flash']:
-						classes.append('flash')
-					if current_style['conceal']:
-						classes.append('conceal')
+						# Los <span> llevan clases, aqui las ponemos.
+						classes = []
+						if current_style['bold']:
+							classes.append('bold')
+						if current_style['italic']:
+							classes.append('italic')
+						if current_style['underline']:
+							classes.append('underline')
+						if current_style['flash']:
+							classes.append('flash')
+						if current_style['conceal']:
+							classes.append('conceal')
 
-					class_str = ' '.join(classes) # Tambien se puede hacer for clase in classes: class_str += clase
-					class_attr = f' class="{class_str}"' if class_str else '' # Si no tenemos clases, no ponemos nada, por que va justo despues del <span> sin espacio.
-					linea_F = f'<span{class_attr} style="color: {current_style["fg"]}; background-color: {current_style["bg"]};">{text_segment}</span>' # La linea, ya construida
-					enlace = regex_enlaces(linea_F)
-					if enlace != None:
-						linea_F = linea_F.replace(enlace[1],f"<a href='{enlace[0]}'>{enlace[1]}</a>")
-					lineas_vistas[lin_actual] = f"{linea_F}"
+						class_str = ' '.join(classes) # Tambien se puede hacer for clase in classes: class_str += clase
+						class_attr = f' class="{class_str}"' if class_str else '' # Si no tenemos clases, no ponemos nada, por que va justo despues del <span> sin espacio.
+						linea_F = f'<span{class_attr} style="color: {current_style["fg"]}; background-color: {current_style["bg"]};">{text_segment}</span>' # La linea, ya construida
+						enlace = regex_enlaces(linea_F)
+						if enlace != None:
+							linea_F = linea_F.replace(enlace[1],f"<a href='{enlace[0]}'>{enlace[1]}</a>")
+						lineas_vistas[lin_actual] = f"{linea_F}"
 
-#					div_esta = '<div class="line">'
-#					html+=div_esta
-					html+=linea_F
-#					if lineas_vistas[lin_actual-1] == linea_F:
-#						nuevo_html = html[:-len(linea_F)]
-#						html=nuevo_html
-#						print(f"LINEA REPETIDA EN POSICION {lin_actual}, contenido: {linea_F}\nEs igual a {lineas_vistas[lin_actual-1]}")
-#						div_esta = '<div class="line doble">'
-#						html += div_esta
-#						html += linea_F
-#					else:
-#						print(f"Linea {lin_actual} no se repite...")
-#						div_esta = '<div class="line">'
-#						html += div_esta
-#						html += linea_F
-					lin_actual+=1
-					i = j # Los estilos (Poner el 'nuevo' en el 'anterior')
-				html += '</div>\n' # Cerramos el div de esta linea
-		else: # SI NO TENEMOS CONTENIDO EN EL JSON
-			if 'contenido_texto' in data: # 'Convertimos' el que renderiza capturar.c
-				for line in data['contenido_texto']: # Feo, intenta que no pase.
-					html += f'<div class="line">{line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")}</div>\n'
+	#					div_esta = '<div class="line">'
+	#					html+=div_esta
+						html+=linea_F
+	#					if lineas_vistas[lin_actual-1] == linea_F:
+	#						nuevo_html = html[:-len(linea_F)]
+	#						html=nuevo_html
+	#						print(f"LINEA REPETIDA EN POSICION {lin_actual}, contenido: {linea_F}\nEs igual a {lineas_vistas[lin_actual-1]}")
+	#						div_esta = '<div class="line doble">'
+	#						html += div_esta
+	#						html += linea_F
+	#					else:
+	#						print(f"Linea {lin_actual} no se repite...")
+	#						div_esta = '<div class="line">'
+	#						html += div_esta
+	#						html += linea_F
+						lin_actual+=1
+						i = j # Los estilos (Poner el 'nuevo' en el 'anterior')
+					html += '</div>\n' # Cerramos el div de esta linea
+			else: # SI NO TENEMOS CONTENIDO EN EL JSON
+				if 'contenido_texto' in data: # 'Convertimos' el que renderiza capturar.c
+					for line in data['contenido_texto']: # Feo, intenta que no pase.
+						html += f'<div class="line">{line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")}</div>\n'
 
-			# Parte 'footer' (Enlaces)
-		if not todo_en_uno:
-			html+="<hr>"
-			try: # Si tenemos una página antes
-				anterior = os.path.basename(archivos[arch_actual-1]).replace('.json','.html')
-				html += f"""<p><a href="{anterior}">Página anterior</a> | """
-			except Exception as E:
-				pass
+				# Parte 'footer' (Enlaces)
+			if not todo_en_uno:
+				html+="<hr>"
+				try: # Si tenemos una página antes
+					anterior = os.path.basename(archivos[arch_actual-1]).replace('.json','.html')
+					html += f"""<p><a href="{anterior}">Página anterior</a> | """
+				except Exception as E:
+					pass
 
-			try: # Si tenemos una página siguiente
-				siguiente = os.path.basename(archivos[arch_actual+1]).replace('.json','.html')
-				html += f"""<a href="{siguiente}">Página siguiente</a></p>"""
-			except Exception as E:
-				pass
+				try: # Si tenemos una página siguiente
+					siguiente = os.path.basename(archivos[arch_actual+1]).replace('.json','.html')
+					html += f"""<a href="{siguiente}">Página siguiente</a></p>"""
+				except Exception as E:
+					pass
 
-			html += f"""<p><a href="{ruta_indice}">[Indice principal]</a> | """
-			html += f"""<a href="index.html">[Indice]</a></p>"""
-			if fallos_ascii: # Si 'ascii_a_teletexto' no encuentra eso, ponemos un pequeño aviso con un enlace a el GitHub, por si alguien sabe que hacer para arreglarlo.
-				html+="""<p>Alerta: Se han generado problemas en esta página, mira los bloques que fallan (0x00)</p>"""
-				html+="""<p>Si puedes, por favor, <a href="https://github.com/JuanPCG/teletextio/tree/master">contribuye</a> para arreglar esto</p>"""
-				fallos_ascii = False
+				html += f"""<p><a href="{ruta_indice}">[Indice principal]</a> | """
+				html += f"""<a href="index.html">[Indice]</a></p>"""
+				if fallos_ascii: # Si 'ascii_a_teletexto' no encuentra eso, ponemos un pequeño aviso con un enlace a el GitHub, por si alguien sabe que hacer para arreglarlo.
+					html+="""<p>Alerta: Se han generado problemas en esta página, mira los bloques que fallan (0x00)</p>"""
+					html+="""<p>Si puedes, por favor, <a href="https://github.com/JuanPCG/teletextio/tree/master">contribuye</a> para arreglar esto</p>"""
+					fallos_ascii = False
 
-		html +="""
-			</body>
-		</html>
-		"""
-		return html # Igual que py_final.py, no escribimos aqui, escribimos fuwera.
+			html +="""
+				</body>
+			</html>
+			"""
+			return html # Igual que py_final.py, no escribimos aqui, escribimos fuwera.
+	except:
+		print(f"ERROR en archivo {json_file}")
+		html = ""
+		try: # Si tenemos una página antes
+			anterior = os.path.basename(archivos[arch_actual-1]).replace('.json','.html')
+			html += f"""<p><a href="{anterior}">Página anterior</a> | """
+		except Exception as E:
+			pass
+
+		try: # Si tenemos una página siguiente
+			siguiente = os.path.basename(archivos[arch_actual+1]).replace('.json','.html')
+			html += f"""<a href="{siguiente}">Página siguiente</a></p>"""
+		except Exception as E:
+			pass
+
+		html += f"""<p><a href="{ruta_indice}">[Indice principal]</a> | """
+		html += f"""<a href="index.html">[Indice]</a></p>"""
+		html += """<p>Alerta: Se han generado problemas en esta página, mira los bloques que fallan (0x00)</p>"""
+		return html
+
 
 def encolar(ruta): # Llamamos aqui con los archivos, individuales
 	print(f"\rEmpezando a procesar... {os.path.basename(ruta)}", end="")
@@ -299,7 +320,7 @@ def salir_y_generar_HTML(): # Generamos el index.html>
 
 if __name__ == "__main__":
 	if len(sys.argv) < 3:
-		print("Uso: python3 t.py <archivo o directorio> <canal>")
+		print(f"Uso: {sys.argv[0]} <archivo o directorio> <canal>")
 		sys.exit(1)
 	# ------------------------------------[ 1:1 copiado de mi otro script que estaba usando hasta ahora ]---------------------------------------
 	canal = sys.argv[2]

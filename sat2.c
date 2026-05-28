@@ -46,17 +46,19 @@ int main(int argc, char *argv[]) {
 	char polarization = (argc >= 5) ? argv[4][0] : 'V';
 	uint32_t simbolos = (argc >= 6) ? (uint32_t)atoll(argv[5]) : 22000000;
 
-	// Calcula que LNB usar
-	// Si es mayor que el H usamos el V, es dificil de explicar, pero en resumen, le enviamos a la antena 13v o 18v
+	// Calcula que LNB usar y si necesitamos activar el tono de 22kHz para la Banda Alta
 	uint32_t lnb = (freq >= lnb_switch) ? 10600000 : lnb_low;
 	uint32_t fi = freq - lnb;
+	uint32_t tone = (freq >= lnb_switch) ? SEC_TONE_ON : SEC_TONE_OFF; // <-- IMPORTANTE
 
 	printf("Sintonizando:\n");
 	printf(" - Freq Sat: %u kHz\n", freq);
 	printf(" - LNB usado: %u kHz\n", lnb);
 	printf(" - Freq intermedia: %u kHz\n", fi);
 	printf(" - Polarizacion: %c (Voltaje: %s)\n", polarization, (polarization == 'V') ? "13V" : "18V");
+	printf(" - Tono 22kHz: %s\n", (tone == SEC_TONE_ON) ? "ON (Banda Alta)" : "OFF (Banda Baja)");
 	printf(" - Simbolos: %u\n", simbolos);
+
 
 	int fe_fd = open(fe_path, O_RDWR);
 	if (fe_fd < 0) {
@@ -81,33 +83,57 @@ int main(int argc, char *argv[]) {
 	};
 	struct dtv_properties clear_dtv = { .num = 1, .props = clear_props };
 	ioctl(fe_fd, FE_SET_PROPERTY, &clear_dtv);
-	usleep(100000);
+	usleep(1000000);
 
-	// Voltaje según polarización (esto controla la polarización en satélites)
+	// 1. Configurar el voltaje (Polarización) obligatoriamente ANTES de tocar nada
 	uint32_t voltage = (polarization == 'V') ? SEC_VOLTAGE_13 : SEC_VOLTAGE_18;
+	printf("Configurando voltaje para polarización (%s)... ", (polarization == 'V') ? "13V" : "18V");
+	if (ioctl(fe_fd, FE_SET_VOLTAGE, voltage) < 0) {
+		perror("Error aplicando FE_SET_VOLTAGE");
+	} else {
+		printf("OK\n");
+	}
+	usleep(50000); // 50ms de reposo eléctrico para el LNB
 
-	printf("Configurando tuner...\n");
-	struct dtv_property props[] = {
-		{ .cmd = DTV_DELIVERY_SYSTEM, .u.data = SYS_DVBS },
-		{ .cmd = DTV_FREQUENCY,       .u.data = fi },           // En kHz
-		{ .cmd = DTV_SYMBOL_RATE,     .u.data = simbolos },
-		{ .cmd = DTV_INNER_FEC,       .u.data = FEC_5_6 },      // FEC 5/6 como en VLC
-		{ .cmd = DTV_VOLTAGE,         .u.data = voltage },      // Controla polarización y LNB
-		{ .cmd = DTV_TONE,            .u.data = SEC_TONE_OFF }, // Est o puede ser tambien ON, pero en mi caso no he visto ningun canal que lo necesite (Astra 19.2E y Hispasat)
-		{ .cmd = DTV_TUNE,            .u.data = 0 }
+	// 2. Configurar el Tono de 22kHz (Banda Alta / Baja)
+	printf("Configurando tono de 22kHz (%s)... ", (tone == SEC_TONE_ON) ? "ON" : "OFF");
+	if (ioctl(fe_fd, FE_SET_TONE, tone) < 0) {
+		perror("Error aplicando FE_SET_TONE");
+	} else {
+		printf("OK\n");
+	}
+	usleep(50000); // 50ms para que el LNB estabilice el tono
+
+	// 3. Forzar el sistema de entrega a DVB-S2
+	printf("Estableciendo sistema de entrega DVB-S2...\n");
+	struct dtv_property mode_props[] = {
+		{ .cmd = DTV_DELIVERY_SYSTEM, .u.data = SYS_DVBS2 }
 	};
+	struct dtv_properties dtv_mode = { .num = 1, .props = mode_props };
+	ioctl(fe_fd, FE_SET_PROPERTY, &dtv_mode);
+	usleep(50000);
 
-	struct dtv_properties dtv_props = { .num = 7, .props = props };
+	// 4. Enviar los parámetros de la frecuencia y ejecutar la sintonización (TUNE)
+	printf("Enviando parámetros de frecuencia y modulador...\n");
+	struct dtv_property props[] = {
+		{ .cmd = DTV_FREQUENCY,       .u.data = fi },
+		{ .cmd = DTV_SYMBOL_RATE,     .u.data = simbolos },
+		{ .cmd = DTV_INNER_FEC,       .u.data = FEC_AUTO },
+		{ .cmd = DTV_MODULATION,      .u.data = PSK_8 },
+		{ .cmd = DTV_ROLLOFF,         .u.data = ROLLOFF_AUTO },
+		{ .cmd = DTV_INVERSION,       .u.data = INVERSION_AUTO },
+		{ .cmd = DTV_TUNE,            .u.data = 0 } // El TUNE siempre al final
+	};
+	struct dtv_properties dtv_props = { .num = 7, .props = props }; // Cambiado a 7 propiedades
 
-	// Debug, me esta dando guerra, necesitaba mencionar obbligatoriamente el DTV_TONE
 	if (ioctl(fe_fd, FE_SET_PROPERTY, &dtv_props) < 0) {
-		printf("Error en FE_SET_PROPERTY: %s\n", strerror(errno));
+		printf("Error en FE_SET_PROPERTY (TUNE): %s\n", strerror(errno));
 		close(fe_fd);
 		return 1;
 	}
 
-	printf("Configuración enviada OK\n");
-	usleep(1000000);
+	printf("Configuración física enviada. Esperando estabilización...\n");
+	usleep(500000); // Medio segundo para que el chip procese el cambio de canal	usleep(1000000);
 	// Esperar 1 segundo
 	// No es necesario si tienes una tarjeta buena, la mia es
 	// "buena", pero aun asi no me mata esperarme un segundo
